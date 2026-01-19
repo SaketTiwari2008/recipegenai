@@ -1,8 +1,12 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Check, X, Crown, Zap } from "lucide-react";
+import { Check, X, Crown, Zap, Loader2, ExternalLink } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCheckout } from "@/hooks/useCheckout";
+import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const plans = [
   {
@@ -65,6 +69,67 @@ const faqs = [
 ];
 
 export default function PricingPage() {
+  const { user, subscription, isLoading: authLoading, checkSubscription } = useAuth();
+  const { isLoading: checkoutLoading, startCheckout, openCustomerPortal } = useCheckout();
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
+
+  // Handle success/cancel redirects
+  useEffect(() => {
+    if (searchParams.get("success") === "true") {
+      toast({
+        title: "Welcome to Premium! 🎉",
+        description: "Your subscription is now active. Enjoy unlimited recipes!",
+      });
+      checkSubscription();
+    } else if (searchParams.get("canceled") === "true") {
+      toast({
+        title: "Checkout canceled",
+        description: "No worries! You can subscribe anytime.",
+      });
+    }
+  }, [searchParams]);
+
+  const handlePlanAction = (planName: string) => {
+    if (planName === "Free") {
+      return; // Navigate to chat handled by Link
+    }
+    
+    if (!user) {
+      // Redirect to auth page
+      window.location.href = "/auth";
+      return;
+    }
+
+    if (subscription.subscribed) {
+      openCustomerPortal();
+    } else {
+      startCheckout();
+    }
+  };
+
+  const getPlanButtonText = (plan: typeof plans[0]) => {
+    if (plan.name === "Free") {
+      return subscription.subscribed ? "Current Plan (Free tier)" : plan.cta;
+    }
+
+    if (!user) {
+      return "Sign in to Subscribe";
+    }
+
+    if (subscription.subscribed) {
+      return "Manage Subscription";
+    }
+
+    return plan.cta;
+  };
+
+  const isPlanActive = (planName: string) => {
+    if (planName === "Premium" && subscription.subscribed) return true;
+    if (planName === "Free" && !subscription.subscribed) return true;
+    return false;
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -79,6 +144,17 @@ export default function PricingPage() {
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Start free, upgrade when you need more. No hidden fees, no surprises.
             </p>
+            {user && subscription.subscribed && (
+              <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-gradient-hero text-primary-foreground rounded-full text-sm font-medium">
+                <Crown className="h-4 w-4" />
+                You're a Premium member!
+                {subscription.subscriptionEnd && (
+                  <span className="opacity-80">
+                    • Renews {new Date(subscription.subscriptionEnd).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -86,66 +162,100 @@ export default function PricingPage() {
         <section className="py-12">
           <div className="container px-4 md:px-6">
             <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`relative p-8 rounded-2xl bg-card border-2 ${
-                    plan.popular
-                      ? "border-primary shadow-lg shadow-primary/10"
-                      : "border-border"
-                  }`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground text-sm font-medium rounded-full">
-                      Most Popular
-                    </div>
-                  )}
+              {plans.map((plan) => {
+                const isActive = isPlanActive(plan.name);
+                
+                return (
+                  <div
+                    key={plan.name}
+                    className={`relative p-8 rounded-2xl bg-card border-2 transition-all ${
+                      isActive
+                        ? "border-primary shadow-lg shadow-primary/20 ring-2 ring-primary/10"
+                        : plan.popular
+                        ? "border-primary/50 shadow-lg shadow-primary/10"
+                        : "border-border"
+                    }`}
+                  >
+                    {isActive && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-hero text-primary-foreground text-sm font-medium rounded-full">
+                        Your Plan
+                      </div>
+                    )}
+                    {!isActive && plan.popular && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground text-sm font-medium rounded-full">
+                        Most Popular
+                      </div>
+                    )}
 
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
-                      plan.popular
-                        ? "bg-gradient-hero"
-                        : "bg-muted"
-                    }`}>
-                      <plan.icon className={`h-6 w-6 ${
-                        plan.popular
-                          ? "text-primary-foreground"
-                          : "text-muted-foreground"
-                      }`} />
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${
+                        plan.popular || isActive
+                          ? "bg-gradient-hero"
+                          : "bg-muted"
+                      }`}>
+                        <plan.icon className={`h-6 w-6 ${
+                          plan.popular || isActive
+                            ? "text-primary-foreground"
+                            : "text-muted-foreground"
+                        }`} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
+                        <p className="text-sm text-muted-foreground">{plan.description}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
-                      <p className="text-sm text-muted-foreground">{plan.description}</p>
+
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold text-foreground">{plan.price}</span>
+                      <span className="text-muted-foreground">/{plan.period}</span>
                     </div>
-                  </div>
 
-                  <div className="mb-6">
-                    <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                    <span className="text-muted-foreground">/{plan.period}</span>
-                  </div>
+                    <ul className="space-y-3 mb-8">
+                      {plan.features.map((feature, index) => (
+                        <li key={index} className="flex items-center gap-3">
+                          {feature.included ? (
+                            <Check className="h-5 w-5 text-success flex-shrink-0" />
+                          ) : (
+                            <X className="h-5 w-5 text-muted-foreground/50 flex-shrink-0" />
+                          )}
+                          <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
+                            {feature.text}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
 
-                  <ul className="space-y-3 mb-8">
-                    {plan.features.map((feature, index) => (
-                      <li key={index} className="flex items-center gap-3">
-                        {feature.included ? (
-                          <Check className="h-5 w-5 text-success flex-shrink-0" />
+                    {plan.name === "Free" ? (
+                      <Link to="/chat">
+                        <Button variant={plan.ctaVariant} className="w-full">
+                          {getPlanButtonText(plan)}
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button 
+                        variant={plan.ctaVariant} 
+                        className="w-full gap-2"
+                        onClick={() => handlePlanAction(plan.name)}
+                        disabled={checkoutLoading || authLoading || subscription.isLoading}
+                      >
+                        {(checkoutLoading || subscription.isLoading) ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Please wait...
+                          </>
+                        ) : subscription.subscribed ? (
+                          <>
+                            {getPlanButtonText(plan)}
+                            <ExternalLink className="h-4 w-4" />
+                          </>
                         ) : (
-                          <X className="h-5 w-5 text-muted-foreground/50 flex-shrink-0" />
+                          getPlanButtonText(plan)
                         )}
-                        <span className={feature.included ? "text-foreground" : "text-muted-foreground"}>
-                          {feature.text}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link to="/chat">
-                    <Button variant={plan.ctaVariant} className="w-full">
-                      {plan.cta}
-                    </Button>
-                  </Link>
-                </div>
-              ))}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Annual Discount */}

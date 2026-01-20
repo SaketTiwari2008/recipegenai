@@ -27,20 +27,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create client with user's token
+    // Create client with service role key
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Verify user
+    // Verify user using getClaims
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     
-    if (authError || !user) {
-      console.log('Auth error:', authError?.message);
+    if (claimsError || !claimsData?.claims) {
+      console.log('Auth error:', claimsError?.message);
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const user = { id: claimsData.claims.sub as string };
 
     console.log(`Processing usage request for user: ${user.id}`);
 

@@ -186,13 +186,39 @@ export async function generateRecipe(
       }
 
       const data = await response.json();
+      
+      console.log('[RecipeGen] Webhook response:', JSON.stringify(data));
 
-      // Validate response
-      if (data.status !== 'ok' || !validateRecipeSchema(data.recipe)) {
-        throw new Error('Invalid recipe format received');
+      // Handle different response formats
+      // Format 1: Direct response with status and recipe
+      if (data.status === 'ok' && data.recipe) {
+        if (!validateRecipeSchema(data.recipe)) {
+          console.error('[RecipeGen] Recipe validation failed:', data.recipe);
+          throw new Error('Invalid recipe format received');
+        }
+        return data as WebhookResponse;
       }
-
-      return data as WebhookResponse;
+      
+      // Format 2: Recipe at root level (legacy format)
+      if (data.recipe_name && data.servings && data.ingredients) {
+        console.log('[RecipeGen] Recipe found at root level');
+        const webhookResponse: WebhookResponse = {
+          status: 'ok',
+          recipe: data as Recipe,
+          human_readable: formatRecipeAsText(data as Recipe),
+        };
+        return webhookResponse;
+      }
+      
+      // Format 3: Async workflow response - this means webhook is misconfigured
+      if (data.message === 'Workflow was started') {
+        console.error('[RecipeGen] Webhook is configured for async mode. Please configure n8n to respond when workflow finishes.');
+        throw new Error('Webhook is not returning recipe data. Please check n8n configuration.');
+      }
+      
+      // Unknown format
+      console.error('[RecipeGen] Unexpected response format:', data);
+      throw new Error('Invalid recipe format received');
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Unknown error');
       
@@ -257,6 +283,60 @@ export function generateShoppingListCSV(recipe: Recipe): string {
   return [headers, ...rows].join('\n');
 }
 
+// Format recipe as readable text (fallback)
+export function formatRecipeAsText(recipe: Recipe): string {
+  let text = `**${recipe.recipe_name}** (Serves ${recipe.servings})\n\n`;
+  
+  if (recipe.times) {
+    text += `⏱️ Prep: ${recipe.times.prep_min} min | Cook: ${recipe.times.cook_min} min | Total: ${recipe.times.total_min} min\n\n`;
+  }
+  
+  text += '### Ingredients:\n';
+  recipe.ingredients.forEach((ing) => {
+    text += `• ${formatQuantity(ing.quantity)} ${ing.unit} ${ing.name}`;
+    if (ing.notes) text += ` (${ing.notes})`;
+    text += '\n';
+  });
+  
+  if (recipe.equipment && recipe.equipment.length > 0) {
+    text += '\n### Equipment:\n';
+    recipe.equipment.forEach((eq) => {
+      text += `• ${eq}\n`;
+    });
+  }
+  
+  text += '\n### Instructions:\n';
+  recipe.steps.forEach((step) => {
+    text += `${step.step}. ${step.instruction}`;
+    if (step.time_min) text += ` (${step.time_min} min)`;
+    text += '\n';
+  });
+  
+  if (recipe.nutrition_per_serving && recipe.nutrition_per_serving.calories_kcal) {
+    text += '\n### Nutrition (per serving):\n';
+    text += `Calories: ${recipe.nutrition_per_serving.calories_kcal} kcal | `;
+    text += `Protein: ${recipe.nutrition_per_serving.protein_g}g | `;
+    text += `Fat: ${recipe.nutrition_per_serving.fat_g}g | `;
+    text += `Carbs: ${recipe.nutrition_per_serving.carbs_g}g\n`;
+  }
+  
+  if (recipe.substitutions && recipe.substitutions.length > 0) {
+    text += '\n### Substitutions:\n';
+    recipe.substitutions.forEach((sub) => {
+      text += `• ${sub}\n`;
+    });
+  }
+  
+  if (recipe.safety_notes && recipe.safety_notes.length > 0) {
+    text += '\n⚠️ **Safety Notes:**\n';
+    recipe.safety_notes.forEach((note) => {
+      text += `• ${note}\n`;
+    });
+  }
+  
+  return text;
+}
+
 // Download CSV file
 export function downloadCSV(content: string, filename: string): void {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
@@ -277,6 +357,7 @@ export const errorMessages = {
   invalid_response: "Recipe didn't cook properly. Let's try again! 🔄",
   rate_limited: "Too many requests. Please wait a minute. ⏰",
   server_error: "Our servers are having trouble. We're fixing it! 🔧",
+  webhook_async: "Recipe service is starting up. Please try again in a moment. ⏳",
 };
 
 export function getErrorMessage(error: Error): string {
@@ -285,6 +366,9 @@ export function getErrorMessage(error: Error): string {
   }
   if (error.message.includes('network') || error.message.includes('fetch')) {
     return errorMessages.network_error;
+  }
+  if (error.message.includes('n8n') || error.message.includes('Workflow')) {
+    return errorMessages.webhook_async;
   }
   if (error.message.includes('Invalid recipe')) {
     return errorMessages.invalid_response;

@@ -1,16 +1,21 @@
 import { useState, useRef, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RecipeDisplay } from "@/components/recipe/RecipeDisplay";
 import { IngredientModal } from "@/components/chat/IngredientModal";
 import { LoadingMessage } from "@/components/chat/LoadingMessage";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRecipeUsage } from "@/hooks/useRecipeUsage";
+import { useSavedRecipes } from "@/hooks/useSavedRecipes";
 import {
   Send,
   ChefHat,
   ShoppingBasket,
   Sparkles,
+  AlertCircle,
+  Crown,
 } from "lucide-react";
 import {
   generateRecipe,
@@ -37,12 +42,17 @@ const exampleSearches = [
 
 export default function ChatPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  const { user, subscription } = useAuth();
+  const { usage, recordUsage, isPremium, checkUsage } = useRecipeUsage();
+  const { saveRecipe, isRecipeSaved, canSave } = useSavedRecipes();
 
   // Handle initial query from URL
   useEffect(() => {
@@ -71,6 +81,15 @@ export default function ChatPage() {
   const handleSubmit = async (messageText: string = input) => {
     if (!messageText.trim() || isLoading) return;
 
+    // Check usage limit for free users
+    if (user && !isPremium && !usage.canGenerate) {
+      addMessage({
+        type: "error",
+        content: "You've reached your daily limit of 5 free recipes. Upgrade to Premium for unlimited recipes! 🚀",
+      });
+      return;
+    }
+
     const userMessage = messageText.trim();
     setInput("");
 
@@ -84,6 +103,11 @@ export default function ChatPage() {
 
     try {
       const response: WebhookResponse = await generateRecipe(userMessage);
+
+      // Record usage for authenticated free users
+      if (user && !isPremium) {
+        await recordUsage(response.recipe.recipe_name);
+      }
 
       // Add recipe message
       addMessage({
@@ -146,9 +170,29 @@ export default function ChatPage() {
               <h2 className="text-2xl font-bold text-foreground mb-2">
                 What would you like to cook?
               </h2>
-              <p className="text-muted-foreground mb-8 max-w-md">
+              <p className="text-muted-foreground mb-4 max-w-md">
                 Ask for any recipe in English or Hindi. I'll give you detailed instructions with ingredients and timings.
               </p>
+
+              {/* Usage indicator for authenticated free users */}
+              {user && !isPremium && (
+                <div className="flex items-center gap-2 mb-6 px-4 py-2 bg-muted/50 rounded-full">
+                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {usage.remaining} of {usage.limit} free recipes remaining today
+                  </span>
+                </div>
+              )}
+
+              {/* Premium badge */}
+              {isPremium && (
+                <div className="flex items-center gap-2 mb-6 px-4 py-2 bg-primary/10 rounded-full">
+                  <Crown className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-primary font-medium">
+                    Premium • Unlimited recipes
+                  </span>
+                </div>
+              )}
 
               {/* Quick Examples */}
               <div className="flex flex-wrap justify-center gap-2 mb-6">
@@ -204,6 +248,9 @@ export default function ChatPage() {
                       <RecipeDisplay
                         recipe={message.recipe}
                         humanReadable={message.humanReadable || ""}
+                        onSave={canSave ? saveRecipe : undefined}
+                        isSaved={isRecipeSaved(message.recipe.recipe_name)}
+                        canSave={canSave}
                       />
                     </div>
                   ) : (

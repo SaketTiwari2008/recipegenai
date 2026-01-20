@@ -21,6 +21,9 @@ import {
   Lightbulb,
   ShoppingCart,
   CookingPot,
+  Bookmark,
+  BookmarkCheck,
+  Crown,
 } from "lucide-react";
 import {
   type Recipe,
@@ -30,19 +33,31 @@ import {
   downloadCSV,
 } from "@/services/api.service";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface RecipeDisplayProps {
   recipe: Recipe;
   humanReadable: string;
+  onSave?: (recipe: Recipe, humanReadable?: string, notes?: string) => Promise<boolean>;
+  isSaved?: boolean;
+  canSave?: boolean;
 }
 
-export function RecipeDisplay({ recipe: initialRecipe, humanReadable }: RecipeDisplayProps) {
+export function RecipeDisplay({ 
+  recipe: initialRecipe, 
+  humanReadable,
+  onSave,
+  isSaved = false,
+  canSave = false,
+}: RecipeDisplayProps) {
   const [recipe, setRecipe] = useState(initialRecipe);
   const [servings, setServings] = useState(initialRecipe.servings);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
   const [isScaling, setIsScaling] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleServingsChange = (value: number[]) => {
     const newServings = value[0];
@@ -94,6 +109,30 @@ export function RecipeDisplay({ recipe: initialRecipe, humanReadable }: RecipeDi
     setCheckedIngredients(newChecked);
   };
 
+  const handleSave = async () => {
+    if (!onSave) {
+      // Not logged in or not premium
+      toast({
+        title: "Premium Feature",
+        description: "Upgrade to Premium to save recipes to your collection.",
+        action: (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => navigate('/pricing')}
+          >
+            Upgrade
+          </Button>
+        ),
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    await onSave(initialRecipe, humanReadable);
+    setIsSaving(false);
+  };
+
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-lg">
       <Tabs defaultValue="recipe" className="w-full">
@@ -139,6 +178,31 @@ export function RecipeDisplay({ recipe: initialRecipe, humanReadable }: RecipeDi
 
               {/* Action Buttons */}
               <div className="flex gap-2 no-print">
+                {isSaved ? (
+                  <Button variant="success" size="sm" disabled>
+                    <BookmarkCheck className="h-4 w-4" />
+                    Saved
+                  </Button>
+                ) : canSave ? (
+                  <Button 
+                    variant="teal" 
+                    size="sm" 
+                    onClick={handleSave}
+                    disabled={isSaving}
+                  >
+                    <Bookmark className="h-4 w-4" />
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSave}
+                  >
+                    <Crown className="h-4 w-4" />
+                    Save
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handlePrint}>
                   <Printer className="h-4 w-4" />
                 </Button>

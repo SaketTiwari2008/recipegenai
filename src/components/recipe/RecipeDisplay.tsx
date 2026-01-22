@@ -24,6 +24,7 @@ import {
   Bookmark,
   BookmarkCheck,
   Crown,
+  Share2,
 } from "lucide-react";
 import {
   type Recipe,
@@ -31,6 +32,7 @@ import {
   formatQuantity,
   generateShoppingListCSV,
   downloadCSV,
+  formatRecipeAsText,
 } from "@/services/api.service";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -97,6 +99,44 @@ export function RecipeDisplay({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleShare = async () => {
+    const shareText = formatRecipeAsText(recipe);
+    const shareData = {
+      title: recipe.recipe_name,
+      text: `Check out this recipe for ${recipe.recipe_name}!\n\n${shareText}`,
+    };
+
+    // Try Web Share API first (mobile-friendly)
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData);
+        toast({
+          title: "Shared!",
+          description: "Recipe shared successfully.",
+        });
+        return;
+      } catch (error) {
+        // User cancelled or share failed, fall through to clipboard
+        if ((error as Error).name === "AbortError") return;
+      }
+    }
+
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to clipboard!",
+        description: "Recipe copied. You can now paste and share it.",
+      });
+    } catch (error) {
+      toast({
+        title: "Couldn't share",
+        description: "Please try copying the recipe manually.",
+        variant: "destructive",
+      });
+    }
   };
 
   const toggleIngredient = (index: number) => {
@@ -203,7 +243,10 @@ export function RecipeDisplay({
                     Save
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={handlePrint}>
+                <Button variant="outline" size="sm" onClick={handleShare} title="Share recipe">
+                  <Share2 className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handlePrint} title="Print recipe">
                   <Printer className="h-4 w-4" />
                 </Button>
               </div>

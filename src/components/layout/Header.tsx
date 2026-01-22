@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ChefHat, Menu, X, LogOut, User, Crown } from "lucide-react";
+import { ChefHat, Menu, X, LogOut, User, Crown, BookOpen } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -78,6 +78,14 @@ export function Header() {
                       Get Recipe
                     </Link>
                   </DropdownMenuItem>
+                  {subscription.subscribed && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/saved" className="w-full cursor-pointer">
+                        <BookOpen className="h-4 w-4 mr-2" />
+                        Saved Recipes
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link to="/pricing" className="w-full cursor-pointer">
                       {subscription.subscribed ? "Manage Plan" : "Upgrade to Premium"}
@@ -142,10 +150,18 @@ export function Header() {
               {user ? (
                 <>
                   {subscription.subscribed && (
-                    <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-hero text-primary-foreground text-sm font-medium">
-                      <Crown className="h-3.5 w-3.5" />
-                      Premium Member
-                    </div>
+                    <>
+                      <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-hero text-primary-foreground text-sm font-medium">
+                        <Crown className="h-3.5 w-3.5" />
+                        Premium Member
+                      </div>
+                      <Link to="/saved" onClick={() => setIsMenuOpen(false)}>
+                        <Button variant="outline" className="w-full">
+                          <BookOpen className="h-4 w-4 mr-2" />
+                          Saved Recipes
+                        </Button>
+                      </Link>
+                    </>
                   )}
                   <p className="text-sm text-muted-foreground text-center py-2">
                     {user.email}

@@ -1,6 +1,6 @@
 // RecipeGen API Service - Webhook Integration
 
-const WEBHOOK_URL = 'https://tiwari-saket.app.n8n.cloud/webhook/88069dd2-c683-48ca-bfae-1f5ca2d95079';
+const WEBHOOK_URL = 'https://n8n-hz1k.onrender.com/webhook/88069dd2-c683-48ca-bfae-1f5ca2d95079';
 const TIMEOUT_MS = 30000;
 const MAX_RETRIES = 2;
 

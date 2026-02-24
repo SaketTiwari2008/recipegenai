@@ -1,7 +1,7 @@
 // RecipeGen API Service - Webhook Integration
 
-const WEBHOOK_URL = 'https://ayush-tiwari.app.n8n.cloud/webhook-test/b2d929a2-7fcf-424e-ba47-1d8ca8c078d4';
-const TIMEOUT_MS = 30000;
+const WEBHOOK_URL = 'https://ayush-tiwari.app.n8n.cloud/webhook/b2d929a2-7fcf-424e-ba47-1d8ca8c078d4';
+const TIMEOUT_MS = 60000;
 const MAX_RETRIES = 2;
 
 export interface RecipeIngredient {
